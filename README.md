@@ -1,18 +1,26 @@
-# Basic Reason Template
+# [Chess.js](https://github.com/jhlywa/chess.js) bindings for Bucklescript in Reason
 
-Hello! This project allows you to quickly get started with Reason and BuckleScript. If you wanted a more sophisticated version, try the `react` template (`bsb -theme react -init .`).
+Work in progress
 
 # Build
 ```
-npm run build
+yarn install
+yarn build
 ```
 
 # Build + Watch
-
 ```
-npm run start
+yarn run start
 ```
 
+# Run (Node)
+```
+node src/Chess.bs.js
+```
 
-# Editor
-If you use `vscode`, Press `Windows + Shift + B` it will build automatically
+# Run (Browser)
+This fails (look at error in console)! Please help :)
+```
+yarn run webpack
+open index.html
+```
