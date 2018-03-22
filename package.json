@@ -1,0 +1,23 @@
+{
+  "name": "chessjs-bindings",
+  "version": "0.1.0",
+  "scripts": {
+    "build": "bsb -make-world",
+    "start": "bsb -make-world -w",
+    "clean": "bsb -clean-world",
+    "webpack": "webpack -w"
+  },
+  "keywords": [
+    "BuckleScript"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "bs-platform": "^2.2.2",
+    "webpack-cli": "^2.0.12"
+  },
+  "dependencies": {
+    "chess.js": "^0.10.2",
+    "webpack": "^4.2.0"
+  }
+}
