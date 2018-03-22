@@ -16,12 +16,21 @@ type square = string;
 /*     | SAN(san) */
 /*     | FromTo(from_to); */
 /* }; */
-[@bs.val] [@bs.module "chess.js"]
-external create : (~fen: fen=?, unit) => chess = "Chess";
+[@bs.new] [@bs.module]
+external createForBrowser : (~fen: fen=?, unit) => chess = "chess.js";
+
+[@bs.new] [@bs.module "chess.js"]
+external createForNode : (~fen: fen=?, unit) => chess = "Chess";
 
 [@bs.send] external ascii : chess => string = "";
 
 [@bs.send] external fen : chess => fen = "";
+
+let create = (~fen=?, ()) =>
+  switch ([%external window]) {
+  | None => createForNode(~fen?, ())
+  | Some(_) => createForBrowser(~fen?, ())
+  };
 
 let chess = create();
 

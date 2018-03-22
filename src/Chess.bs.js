@@ -5,13 +5,22 @@ var Random = require("bs-platform/lib/js/random.js");
 var ChessJs = require("chess.js");
 var Caml_array = require("bs-platform/lib/js/caml_array.js");
 
-var chess = ChessJs.Chess(undefined);
+function create(fen, _) {
+  var match = typeof (window) === "undefined" ? undefined : (window);
+  if (match !== undefined) {
+    return new ChessJs(fen ? fen[0] : undefined);
+  } else {
+    return new ChessJs.Chess(fen ? fen[0] : undefined);
+  }
+}
+
+var chess = create(/* None */0, /* () */0);
 
 console.log(chess.ascii());
 
 console.log(chess.fen());
 
-var chess$1 = ChessJs.Chess("r1k4r/p2nb1p1/2b4p/1p1n1p2/2PP4/3Q1NB1/1P3PPP/R5K1 b - c3 0 19");
+var chess$1 = create(/* Some */["r1k4r/p2nb1p1/2b4p/1p1n1p2/2PP4/3Q1NB1/1P3PPP/R5K1 b - c3 0 19"], /* () */0);
 
 console.log(chess$1.ascii());
 
@@ -53,8 +62,9 @@ function play_random_game(chess) {
   };
 }
 
-play_random_game(ChessJs.Chess(undefined));
+play_random_game(create(/* None */0, /* () */0));
 
+exports.create = create;
 exports.chess = chess$1;
 exports.gameOver = gameOver;
 exports.play_random_game = play_random_game;
