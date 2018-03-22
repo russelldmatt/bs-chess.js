@@ -19,13 +19,8 @@ node src/Chess.bs.js
 ```
 
 # Run (Browser)
-This fails (look at error in console)! Please help :)
+Works now (thanks @chenglou!).
 ```
 yarn run webpack
 open index.html
-```
-
-For a non-reason version that does work in the browser:
-```
-open example-that-works-in-browser/index.html
 ```
