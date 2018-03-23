@@ -1,3 +1,8 @@
+let unimplemented = x => {
+  Js.log(x);
+  Js.Exn.raiseError("Unimplemented");
+};
+
 module Raw = {
   /* Raw is a literal translation of the chess.js API */
   type chess;
@@ -6,7 +11,17 @@ module Raw = {
   type color = string;
   type piece = Js.Dict.t(string);
   type square = string;
-  type move;
+  type san = string;
+  type from_to;
+  type full_move = {
+    .
+    "color": color,
+    "from": square,
+    "to": square,
+    "flags": string,
+    "piece": string, /* Not the same as piece type */
+    "san": san,
+  };
   type header;
   type turn = string;
   type validation;
@@ -19,7 +34,10 @@ module Raw = {
   [@bs.send] external fen : chess => fen = "";
   [@bs.send] external game_over : chess => bool = "";
   [@bs.send] external get : (chess, square) => Js.nullable(piece) = "";
-  [@bs.send] external history : chess => array(move) = "";
+  type verbose = {. "verbose": bool};
+  [@bs.send] external history : chess => array(san) = "";
+  [@bs.send]
+  external history_verbose : (chess, verbose) => array(full_move) = "history";
   [@bs.send] external in_check : chess => bool = "";
   [@bs.send] external in_checkmate : chess => bool = "";
   [@bs.send] external in_draw : chess => bool = "";
@@ -31,21 +49,28 @@ module Raw = {
   [@bs.send] external load : (chess, fen) => unit = "";
   /* CR mrussell: add options (sloppy) */
   [@bs.send] external load_pgn : (chess, pgn) => unit = "";
-  [@bs.send] external move : (chess, move) => Js.nullable(move) = "";
+  [@bs.send]
+  external move_san : (chess, san) => Js.nullable(full_move) = "move";
+  [@bs.send]
+  external move_from_to : (chess, from_to) => Js.nullable(full_move) = "move";
+  external move_full : (chess, full_move) => Js.nullable(full_move) = "move";
   /* The options you can pass to "moves" are too flexible to represent
      nicely so I'm just going to represent it as a few different
      functions. */
-  type move_options = {. "verbose": bool};
+  [@bs.send] external moves : chess => array(san) = "moves";
   [@bs.send]
-  external legal_moves : (chess, move_options) => array(move) = "moves";
-  type move_for_square_options = {
+  external moves_verbose : (chess, verbose) => array(full_move) = "moves";
+  type for_square = {. "square": square};
+  type for_square_verbose = {
     .
     "square": square,
     "verbose": bool,
   };
   [@bs.send]
-  external legal_moves_for_square :
-    (chess, move_for_square_options) => array(move) =
+  external moves_for_square : (chess, for_square) => array(san) = "moves";
+  [@bs.send]
+  external moves_for_square_verbose :
+    (chess, for_square_verbose) => array(full_move) =
     "moves";
   [@bs.send] external pgn : chess => pgn = "";
   [@bs.send] external put : (chess, piece, square) => bool = "";
@@ -53,7 +78,7 @@ module Raw = {
   [@bs.send] external reset : chess => unit = "";
   [@bs.send] external square_color : (chess, square) => color = "";
   [@bs.send] external turn : chess => turn = "";
-  [@bs.send] external undo : chess => Js.nullable(move) = "";
+  [@bs.send] external undo : chess => Js.nullable(full_move) = "";
   [@bs.send] external validate_fen : (chess, fen) => validation = "";
 };
 
@@ -62,6 +87,11 @@ module List = {
   let init = (n, f) => Array.init(n, f) |> Array.to_list;
   let bind = (f, l) => l |> List.map(f) |> List.concat;
   let filter_map = Belt.List.keepMap;
+};
+
+module String = {
+  include String;
+  let ofChar = c => String.make(1, c);
 };
 
 module Api = {
@@ -90,17 +120,34 @@ module Api = {
   };
   module File = {
     type t = [ | `a | `b | `c | `d | `e | `f | `g | `h];
-    let toString = t =>
+    let toChar = t =>
       switch (t) {
-      | `a => "a"
-      | `b => "b"
-      | `c => "c"
-      | `d => "d"
-      | `e => "e"
-      | `f => "f"
-      | `g => "g"
-      | `h => "h"
+      | `a => 'a'
+      | `b => 'b'
+      | `c => 'c'
+      | `d => 'd'
+      | `e => 'e'
+      | `f => 'f'
+      | `g => 'g'
+      | `h => 'h'
       };
+    let ofChar = c =>
+      switch (c) {
+      | 'a' => `a
+      | 'b' => `b
+      | 'c' => `c
+      | 'd' => `d
+      | 'e' => `e
+      | 'f' => `f
+      | 'g' => `g
+      | 'h' => `h
+      | c =>
+        Js.Exn.raiseError(
+          "Cannot convert File.t from char (char: " ++ String.ofChar(c) ++ ")",
+        )
+      };
+    let ofString = s => ofChar(s.[0]);
+    let toString = t => t |> toChar |> String.ofChar;
     let all: list(t) = [`a, `b, `c, `d, `e, `f, `g, `h];
   };
   module Square = {
@@ -111,6 +158,10 @@ module Api = {
     let toString = t => {
       let {file, rank} = t;
       File.toString(file) ++ string_of_int(rank);
+    };
+    let ofString = s => {
+      file: s.[0] |> File.ofChar,
+      rank: s.[1] |> String.ofChar |> int_of_string,
     };
   };
   module Piece = {
@@ -168,22 +219,69 @@ module Api = {
       Belt.Option.map(raw, Piece.ofRaw);
     };
   module Move = {
+    type san = string;
+    module From_to = {
+      type t = {
+        from: string,
+        to_: string,
+      };
+      /* CR mrussell:  */
+      let toRaw = unimplemented;
+    };
+    module Full = {
+      type t = {
+        color: Color.t,
+        from: Square.t,
+        to_: Square.t,
+        flags: string,
+        piece: Piece.Type.t,
+        san,
+      };
+      let ofRaw: Raw.full_move => t =
+        raw => {
+          color: Color.ofRaw(raw##color),
+          from: Square.ofString(raw##from),
+          to_: Square.ofString(raw##to),
+          flags: raw##flags,
+          piece: Piece.Type.ofRaw(raw##piece),
+          san: raw##san,
+        };
+      /* CR mrussell:  */
+      let toRaw = unimplemented;
+    };
+    type t =
+      | SAN(string)
+      | From_to(From_to.t)
+      | Full(Full.t);
     module Options = {
       type t = {square: option(Square.t)};
     };
   };
   let legalMoves = (~move_options=?, t) => {
     let square = Belt.Option.flatMap(move_options, x => x.Move.Options.square);
-    switch (square) {
-    | None => Raw.legal_moves(t, {"verbose": true})
-    | Some(square) =>
-      Raw.legal_moves_for_square(
-        t,
-        {"square": Square.toString(square), "verbose": true},
-      )
-    };
+    let raw_full_moves =
+      switch (square) {
+      | None => Raw.moves_verbose(t, {"verbose": true})
+      | Some(square) =>
+        Raw.moves_for_square_verbose(
+          t,
+          {"square": Square.toString(square), "verbose": true},
+        )
+      };
+    Array.map(Move.Full.ofRaw, raw_full_moves);
   };
-  let move = Raw.move;
+  let move: (t, Move.t) => option(Move.Full.t) =
+    (t, req) => {
+      let parseResponse = r =>
+        r |> Js.Nullable.toOption |. Belt.Option.map(Move.Full.ofRaw);
+      switch (req) {
+      | Move.SAN(san) => Raw.move_san(t, san) |> parseResponse
+      | From_to(from_to) =>
+        Move.From_to.toRaw(from_to) |> Raw.move_from_to(t) |> parseResponse
+      | Full(full) =>
+        Move.Full.toRaw(full) |> Raw.move_full(t) |> parseResponse
+      };
+    };
 };
 
 include Api;
@@ -234,7 +332,7 @@ module Tests = {
         Js.log("legal moves:");
         Array.iter(Js.log, moves);
         let selected_move = moves[Random.int(Array.length(moves))];
-        switch (Js.Nullable.toOption(move(t, selected_move))) {
+        switch (move(t, Move.Full(selected_move))) {
         | Some(_) =>
           Js.log(ascii(t));
           loop(t);

@@ -3,7 +3,7 @@
 
 var List = require("bs-platform/lib/js/list.js");
 var $$Array = require("bs-platform/lib/js/array.js");
-var Curry = require("bs-platform/lib/js/curry.js");
+var Block = require("bs-platform/lib/js/block.js");
 var Js_exn = require("bs-platform/lib/js/js_exn.js");
 var Random = require("bs-platform/lib/js/random.js");
 var $$String = require("bs-platform/lib/js/string.js");
@@ -13,18 +13,14 @@ var Js_option = require("bs-platform/lib/js/js_option.js");
 var Caml_array = require("bs-platform/lib/js/caml_array.js");
 var Belt_Option = require("bs-platform/lib/js/belt_Option.js");
 var Js_primitive = require("bs-platform/lib/js/js_primitive.js");
+var Caml_missing_polyfill = require("bs-platform/lib/js/caml_missing_polyfill.js");
 
-var Raw = /* module */[];
-
-function map(f, t) {
-  if (t) {
-    return /* Some */[Curry._1(f, t[0])];
-  } else {
-    return /* None */0;
-  }
+function unimplemented(x) {
+  console.log(x);
+  return Js_exn.raiseError("Unimplemented");
 }
 
-var Option = /* module */[/* map */map];
+var Raw = /* module */[];
 
 function init(n, f) {
   return $$Array.to_list($$Array.init(n, f));
@@ -258,31 +254,50 @@ function get(t, square) {
   var rawSquare = toString$2(square);
   console.log("raw square: ", rawSquare);
   var raw = t.get(rawSquare);
-  return map(ofRaw$2, (raw == null) ? /* None */0 : [raw]);
+  return Belt_Option.map((raw == null) ? /* None */0 : [raw], ofRaw$2);
 }
+
+var From_to = /* module */[/* toRaw */unimplemented];
+
+var Full = /* module */[
+  /* ofRaw */unimplemented,
+  /* toRaw */unimplemented
+];
 
 var Options = /* module */[];
 
-var Move = /* module */[/* Options */Options];
+var Move = /* module */[
+  /* From_to */From_to,
+  /* Full */Full,
+  /* Options */Options
+];
 
 function legalMoves(move_options, t) {
   var square = Belt_Option.flatMap(move_options, (function (x) {
           return x[/* square */0];
         }));
-  if (square) {
-    return t.moves({
-                square: toString$2(square[0]),
-                verbose: /* true */1
-              });
-  } else {
-    return t.moves({
-                verbose: /* true */1
-              });
-  }
+  var raw_full_moves = square ? t.moves({
+          square: toString$2(square[0]),
+          verbose: /* true */1
+        }) : t.moves({
+          verbose: /* true */1
+        });
+  return $$Array.map(unimplemented, raw_full_moves);
 }
 
-function move(prim, prim$1) {
-  return prim.move(prim$1);
+function move(t, req) {
+  var parseResponse = function (r) {
+    return Belt_Option.map((r == null) ? /* None */0 : [r], unimplemented);
+  };
+  switch (req.tag | 0) {
+    case 0 : 
+        return parseResponse(t.move(req[0]));
+    case 1 : 
+        return parseResponse(t.move(unimplemented(req[0])));
+    case 2 : 
+        return parseResponse(Caml_missing_polyfill.not_implemented("move not implemented by bucklescript yet\n"));
+    
+  }
 }
 
 var Api = /* module */[
@@ -326,10 +341,10 @@ console.log(get(chess$1, /* record */[
           /* rank */1
         ]));
 
-console.log(map(toString$4, get(chess$1, /* record */[
+console.log(Belt_Option.map(get(chess$1, /* record */[
               /* file : g */103,
               /* rank */2
-            ])));
+            ]), toString$4));
 
 var allRanks = $$Array.to_list($$Array.init(8, (function (x) {
             return x + 1 | 0;
@@ -347,12 +362,12 @@ var allSquares = List.concat(List.map((function (file) {
 console.log("gettin all squares");
 
 var allPieces = Belt_List.keepMap(allSquares, (function (square) {
-        return map((function (piece) {
+        return Belt_Option.map(get(chess$1, square), (function (piece) {
                       return /* tuple */[
                               square,
                               piece
                             ];
-                    }), get(chess$1, square));
+                    }));
       }));
 
 console.log(chess$1.ascii());
@@ -378,14 +393,14 @@ function play_random_game(t) {
               return /* () */0;
             }), moves);
       var selected_move = Caml_array.caml_array_get(moves, Random.$$int(moves.length));
-      var match = t$1.move(selected_move);
-      if (match == null) {
-        console.log("error");
-        return /* () */0;
-      } else {
+      var match = move(t$1, /* Full */Block.__(2, [selected_move]));
+      if (match) {
         console.log(t$1.ascii());
         continue ;
         
+      } else {
+        console.log("error");
+        return /* () */0;
       }
     }
   };
@@ -400,8 +415,8 @@ var Tests = /* module */[
   /* play_random_game */play_random_game
 ];
 
+exports.unimplemented = unimplemented;
 exports.Raw = Raw;
-exports.Option = Option;
 exports.List = List$1;
 exports.Api = Api;
 exports.Color = Color;
