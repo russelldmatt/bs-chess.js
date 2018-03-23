@@ -32,8 +32,8 @@ module Raw = {
   /* CR mrussell: add options (sloppy) */
   [@bs.send] external load_pgn : (chess, pgn) => unit = "";
   [@bs.send] external move : (chess, move) => Js.nullable(move) = "";
-  /* This options you can pass to "moves" are too flexible to
-     represent nicely so I'm just going to find a few different
+  /* The options you can pass to "moves" are too flexible to represent
+     nicely so I'm just going to represent it as a few different
      functions. */
   type move_options = {. "verbose": bool};
   [@bs.send]
@@ -55,15 +55,6 @@ module Raw = {
   [@bs.send] external turn : chess => turn = "";
   [@bs.send] external undo : chess => Js.nullable(move) = "";
   [@bs.send] external validate_fen : (chess, fen) => validation = "";
-};
-
-module Option = {
-  type t('a) = Js.Option.t('a);
-  let map = (f, t) =>
-    switch (t) {
-    | None => None
-    | Some(x) => Some(f(x))
-    };
 };
 
 module List = {
@@ -174,7 +165,7 @@ module Api = {
       let rawSquare = square |> Square.toString;
       Js.log2("raw square: ", rawSquare);
       let raw = Raw.get(t, rawSquare) |> Js.Nullable.toOption;
-      Option.map(Piece.ofRaw, raw);
+      Belt.Option.map(raw, Piece.ofRaw);
     };
   module Move = {
     module Options = {
@@ -212,7 +203,8 @@ module Tests = {
   Js.log(get(chess, {Square.file: `e, rank: 8}));
   Js.log(get(chess, {Square.file: `e, rank: 1}));
   Js.log(
-    get(chess, {Square.file: `g, rank: 2}) |> Option.map(Piece.toString),
+    get(chess, {Square.file: `g, rank: 2})
+    |. Belt.Option.map(Piece.toString),
   );
   let allSquares: list(Square.t) = {
     let allRanks = List.init(8, x => x + 1);
@@ -223,7 +215,7 @@ module Tests = {
   let allPieces: list((Square.t, Piece.t)) =
     allSquares
     |. List.filter_map(square =>
-         Option.map(piece => (square, piece), get(chess, square))
+         Belt.Option.map(get(chess, square), piece => (square, piece))
        );
   Js.log(ascii(chess));
   allPieces
