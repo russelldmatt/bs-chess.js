@@ -1,5 +1,5 @@
 {
-  "name": "chessjs-bindings",
+  "name": "bs-chess.js",
   "version": "0.1.0",
   "scripts": {
     "build": "bsb -make-world",
