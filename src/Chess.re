@@ -12,7 +12,13 @@ module Raw = {
   type piece = Js.Dict.t(string);
   type square = string;
   type san = string;
-  type from_to;
+  type from_to = {
+    .
+    "from": string,
+    "to": string,
+  };
+  [@bs.get_index]
+  external getToFromFromTo : (from_to, [@bs.as "to"] _) => string = "";
   type full_move = {
     .
     "color": color,
@@ -22,6 +28,8 @@ module Raw = {
     "piece": string, /* Not the same as piece type */
     "san": san,
   };
+  [@bs.get_index]
+  external getToFromFullMove : (full_move, [@bs.as "to"] _) => string = "";
   type header;
   type turn = string;
   type validation;
@@ -47,13 +55,13 @@ module Raw = {
   [@bs.send] external header : chess => header = "";
   [@bs.send] external insufficient_material : chess => bool = "";
   [@bs.send] external load : (chess, fen) => unit = "";
-  /* CR mrussell: add options (sloppy) */
-  [@bs.send] external load_pgn : (chess, pgn) => unit = "";
+  type sloppy = {. "sloppy": bool};
+  [@bs.send]
+  external load_pgn : (chess, pgn, Js.nullable(sloppy), unit) => bool = "";
   [@bs.send]
   external move_san : (chess, san) => Js.nullable(full_move) = "move";
   [@bs.send]
   external move_from_to : (chess, from_to) => Js.nullable(full_move) = "move";
-  external move_full : (chess, full_move) => Js.nullable(full_move) = "move";
   /* The options you can pass to "moves" are too flexible to represent
      nicely so I'm just going to represent it as a few different
      functions. */
@@ -112,6 +120,11 @@ module Api = {
             "Cannot convert color from raw (raw: " ++ raw ++ ")",
           )
         };
+    let toRaw = t =>
+      switch (t) {
+      | White => "w"
+      | Black => "b"
+      };
     let toString = t =>
       switch (t) {
       | Black => "black"
@@ -180,6 +193,15 @@ module Api = {
             "Cannot convert piece from raw (raw: " ++ raw ++ ")",
           )
         };
+      let toRaw = t =>
+        switch (t) {
+        | `king => "k"
+        | `queen => "q"
+        | `bishop => "b"
+        | `knight => "n"
+        | `rook => "r"
+        | `pawn => "p"
+        };
       let toString = t =>
         switch (t) {
         | `king => "king"
@@ -225,8 +247,7 @@ module Api = {
         from: string,
         to_: string,
       };
-      /* CR mrussell:  */
-      let toRaw = unimplemented;
+      let toRaw: t => Raw.from_to = t => {"from": t.from, "to": t.to_};
     };
     module Full = {
       type t = {
@@ -241,13 +262,20 @@ module Api = {
         raw => {
           color: Color.ofRaw(raw##color),
           from: Square.ofString(raw##from),
-          to_: Square.ofString(raw##to),
+          to_: Square.ofString(Raw.getToFromFullMove(raw)),
           flags: raw##flags,
           piece: Piece.Type.ofRaw(raw##piece),
           san: raw##san,
         };
-      /* CR mrussell:  */
-      let toRaw = unimplemented;
+      let toRaw: t => Raw.full_move =
+        t => {
+          "color": Color.toRaw(t.color),
+          "from": Square.toString(t.from),
+          "to": Square.toString(t.to_),
+          "flags": t.flags,
+          "piece": Piece.Type.toRaw(t.piece),
+          "san": t.san,
+        };
     };
     type t =
       | SAN(string)
@@ -268,6 +296,7 @@ module Api = {
           {"square": Square.toString(square), "verbose": true},
         )
       };
+    Js.log(raw_full_moves);
     Array.map(Move.Full.ofRaw, raw_full_moves);
   };
   let move: (t, Move.t) => option(Move.Full.t) =
@@ -278,10 +307,14 @@ module Api = {
       | Move.SAN(san) => Raw.move_san(t, san) |> parseResponse
       | From_to(from_to) =>
         Move.From_to.toRaw(from_to) |> Raw.move_from_to(t) |> parseResponse
-      | Full(full) =>
-        Move.Full.toRaw(full) |> Raw.move_full(t) |> parseResponse
+      | Full(full) => Raw.move_san(t, full.san) |> parseResponse
       };
     };
+  let loadPgn = (~sloppy=?, t, pgn) => {
+    let sloppy =
+      Belt.Option.map(sloppy, s => {"sloppy": s}) |> Js.Nullable.fromOption;
+    Raw.load_pgn(t, pgn, sloppy, ());
+  };
 };
 
 include Api;
@@ -291,9 +324,32 @@ module Tests = {
   Js.log(ascii(chess));
   Js.log(fen(chess));
   let chess = {
-    let fen = "r1k4r/p2nb1p1/2b4p/1p1n1p2/2PP4/3Q1NB1/1P3PPP/R5K1 b - c3 0 19";
+    let fen = "6nr/3p2pp/5Q2/3b2B1/1nk1PPBP/p4Np1/p5R1/1R1K1N2 b - - 2 40";
     create(~fen, ());
   };
+  let full_move = {
+    Move.Full.color: Color.Black,
+    from: {
+      Square.file: `a,
+      rank: 2,
+    },
+    to_: {
+      Square.file: `a,
+      rank: 1,
+    },
+    flags: "np",
+    piece: `pawn,
+    san: "a1=B",
+  };
+  /* Move.Full.ofRaw( */
+  /*   [%raw {|{ color: 'b', from: 'f2', to: 'f1', flags: 'np', piece: 'p' }|}], */
+  /* ); */
+  Js.log(ascii(chess));
+  Js.log(Move.Full.toRaw(full_move));
+  Js.log(
+    move(chess, Move.Full(full_move)) |. Belt.Option.map(Move.Full.toRaw),
+  );
+  Js.log(ascii(chess));
   Js.log(ascii(chess));
   Js.log("hey");
   Js.log(ascii(chess));
@@ -324,36 +380,25 @@ module Tests = {
     Js.log("about to play random game");
     Random.self_init();
     /* random game */
-    let rec loop = t =>
+    let rec loop = t => {
+      Js.log(fen(t));
+      Js.log(ascii(t));
       if (gameOver(t)) {
         Js.log("Game over");
       } else {
         let moves = legalMoves(t);
-        Js.log("legal moves:");
-        Array.iter(Js.log, moves);
+        /* Js.log("legal moves:"); */
+        /* Array.iter(Js.log, Array.map(Move.Full.toRaw, moves)); */
         let selected_move = moves[Random.int(Array.length(moves))];
+        Js.log("selecting move:");
+        Js.log(Move.Full.toRaw(selected_move));
         switch (move(t, Move.Full(selected_move))) {
-        | Some(_) =>
-          Js.log(ascii(t));
-          loop(t);
+        | Some(_) => loop(t)
         | None => Js.log("error")
         };
       };
+    };
     loop(t);
   };
   play_random_game(create());
 };
-/* %bs.raw */
-/* {| */
-
-   /* var Chess = require('chess.js').Chess; */
-   /* var chess = new Chess(); */
-
-   /* while (!chess.game_over()) { */
-   /*   var moves = chess.moves(); */
-   /*   var move = moves[Math.floor(Math.random() * moves.length)]; */
-   /*   chess.move(move); */
-   /* } */
-   /* console.log(chess.pgn()); */
-
-   /* |}; */

@@ -12,73 +12,10 @@ var Belt_List = require("bs-platform/lib/js/belt_List.js");
 var Js_option = require("bs-platform/lib/js/js_option.js");
 var Caml_array = require("bs-platform/lib/js/caml_array.js");
 var Belt_Option = require("bs-platform/lib/js/belt_Option.js");
+var Caml_format = require("bs-platform/lib/js/caml_format.js");
+var Caml_string = require("bs-platform/lib/js/caml_string.js");
 var Js_primitive = require("bs-platform/lib/js/js_primitive.js");
-var Caml_missing_polyfill = require("bs-platform/lib/js/caml_missing_polyfill.js");
-
-function unimplemented(x) {
-  console.log(x);
-  return Js_exn.raiseError("Unimplemented");
-}
-
-var Raw = /* module */[];
-
-function init(n, f) {
-  return $$Array.to_list($$Array.init(n, f));
-}
-
-function bind(f, l) {
-  return List.concat(List.map(f, l));
-}
-
-var List$1 = /* module */[
-  /* length */List.length,
-  /* hd */List.hd,
-  /* tl */List.tl,
-  /* nth */List.nth,
-  /* rev */List.rev,
-  /* append */List.append,
-  /* rev_append */List.rev_append,
-  /* concat */List.concat,
-  /* flatten */List.flatten,
-  /* iter */List.iter,
-  /* iteri */List.iteri,
-  /* map */List.map,
-  /* mapi */List.mapi,
-  /* rev_map */List.rev_map,
-  /* fold_left */List.fold_left,
-  /* fold_right */List.fold_right,
-  /* iter2 */List.iter2,
-  /* map2 */List.map2,
-  /* rev_map2 */List.rev_map2,
-  /* fold_left2 */List.fold_left2,
-  /* fold_right2 */List.fold_right2,
-  /* for_all */List.for_all,
-  /* exists */List.exists,
-  /* for_all2 */List.for_all2,
-  /* exists2 */List.exists2,
-  /* mem */List.mem,
-  /* memq */List.memq,
-  /* find */List.find,
-  /* filter */List.filter,
-  /* find_all */List.find_all,
-  /* partition */List.partition,
-  /* assoc */List.assoc,
-  /* assq */List.assq,
-  /* mem_assoc */List.mem_assoc,
-  /* mem_assq */List.mem_assq,
-  /* remove_assoc */List.remove_assoc,
-  /* remove_assq */List.remove_assq,
-  /* split */List.split,
-  /* combine */List.combine,
-  /* sort */List.sort,
-  /* stable_sort */List.stable_sort,
-  /* fast_sort */List.fast_sort,
-  /* sort_uniq */List.sort_uniq,
-  /* merge */List.merge,
-  /* init */init,
-  /* bind */bind,
-  /* filter_map */Belt_List.keepMap
-];
+var Js_null_undefined = require("bs-platform/lib/js/js_null_undefined.js");
 
 function ofRaw(raw) {
   switch (raw) {
@@ -91,6 +28,14 @@ function ofRaw(raw) {
   }
 }
 
+function toRaw(t) {
+  if (t !== 0) {
+    return "w";
+  } else {
+    return "b";
+  }
+}
+
 function toString(t) {
   if (t !== 0) {
     return "white";
@@ -99,35 +44,48 @@ function toString(t) {
   }
 }
 
-var Color = /* module */[
-  /* ofRaw */ofRaw,
-  /* toString */toString
-];
-
-function toString$1(t) {
+function toChar(t) {
   if (t >= 101) {
     if (t >= 103) {
       if (t >= 104) {
-        return "h";
+        return /* "h" */104;
       } else {
-        return "g";
+        return /* "g" */103;
       }
     } else if (t >= 102) {
-      return "f";
+      return /* "f" */102;
     } else {
-      return "e";
+      return /* "e" */101;
     }
   } else if (t >= 99) {
     if (t >= 100) {
-      return "d";
+      return /* "d" */100;
     } else {
-      return "c";
+      return /* "c" */99;
     }
   } else if (t >= 98) {
-    return "b";
+    return /* "b" */98;
   } else {
-    return "a";
+    return /* "a" */97;
   }
+}
+
+function ofChar(c) {
+  var switcher = c - 97 | 0;
+  if (switcher > 7 || switcher < 0) {
+    return Js_exn.raiseError("Cannot convert File.t from char (char: " + ($$String.make(1, c) + ")"));
+  } else {
+    return switcher + 97 | 0;
+  }
+}
+
+function ofString(s) {
+  return ofChar(Caml_string.get(s, 0));
+}
+
+function toString$1(t) {
+  var c = toChar(t);
+  return $$String.make(1, c);
 }
 
 var all = /* :: */[
@@ -157,15 +115,29 @@ var all = /* :: */[
 ];
 
 var File = /* module */[
+  /* toChar */toChar,
+  /* ofChar */ofChar,
+  /* ofString */ofString,
   /* toString */toString$1,
   /* all */all
 ];
 
 function toString$2(t) {
-  return toString$1(t[/* file */0]) + String(t[/* rank */1]);
+  var c = toChar(t[/* file */0]);
+  return $$String.make(1, c) + String(t[/* rank */1]);
 }
 
-var Square = /* module */[/* toString */toString$2];
+function ofString$1(s) {
+  return /* record */[
+          /* file */ofChar(Caml_string.get(s, 0)),
+          /* rank */Caml_format.caml_int_of_string($$String.make(1, Caml_string.get(s, 1)))
+        ];
+}
+
+var Square = /* module */[
+  /* toString */toString$2,
+  /* ofString */ofString$1
+];
 
 function ofRaw$1(raw) {
   var raw$1 = $$String.lowercase(raw);
@@ -184,6 +156,26 @@ function ofRaw$1(raw) {
         return /* rook */-877728231;
     default:
       return Js_exn.raiseError("Cannot convert piece from raw (raw: " + (raw$1 + ")"));
+  }
+}
+
+function toRaw$1(t) {
+  if (t >= -877728231) {
+    if (t >= -470198899) {
+      if (t >= -262202819) {
+        return "b";
+      } else {
+        return "n";
+      }
+    } else if (t >= -571834454) {
+      return "q";
+    } else {
+      return "r";
+    }
+  } else if (t >= -900601784) {
+    return "p";
+  } else {
+    return "k";
   }
 }
 
@@ -207,11 +199,6 @@ function toString$3(t) {
   }
 }
 
-var Type = /* module */[
-  /* ofRaw */ofRaw$1,
-  /* toString */toString$3
-];
-
 function ofRaw$2(raw) {
   return /* record */[
           /* type_ */ofRaw$1(Js_option.getExn(Js_primitive.undefined_to_opt(raw["type"]))),
@@ -222,12 +209,6 @@ function ofRaw$2(raw) {
 function toString$4(t) {
   return toString(t[/* color */1]) + (" " + toString$3(t[/* type_ */0]));
 }
-
-var Piece = /* module */[
-  /* Type */Type,
-  /* ofRaw */ofRaw$2,
-  /* toString */toString$4
-];
 
 function create(fen, _) {
   var match = typeof (window) === "undefined" ? undefined : (window);
@@ -257,20 +238,36 @@ function get(t, square) {
   return Belt_Option.map((raw == null) ? /* None */0 : [raw], ofRaw$2);
 }
 
-var From_to = /* module */[/* toRaw */unimplemented];
+function toRaw$2(t) {
+  return {
+          from: t[/* from */0],
+          to: t[/* to_ */1]
+        };
+}
 
-var Full = /* module */[
-  /* ofRaw */unimplemented,
-  /* toRaw */unimplemented
-];
+function ofRaw$3(raw) {
+  return /* record */[
+          /* color */ofRaw(raw.color),
+          /* from */ofString$1(raw.from),
+          /* to_ */ofString$1(raw["to"]),
+          /* flags */raw.flags,
+          /* piece */ofRaw$1(raw.piece),
+          /* san */raw.san
+        ];
+}
+
+function toRaw$3(t) {
+  return {
+          color: toRaw(t[/* color */0]),
+          from: toString$2(t[/* from */1]),
+          to: toString$2(t[/* to_ */2]),
+          flags: t[/* flags */3],
+          piece: toRaw$1(t[/* piece */4]),
+          san: t[/* san */5]
+        };
+}
 
 var Options = /* module */[];
-
-var Move = /* module */[
-  /* From_to */From_to,
-  /* Full */Full,
-  /* Options */Options
-];
 
 function legalMoves(move_options, t) {
   var square = Belt_Option.flatMap(move_options, (function (x) {
@@ -282,38 +279,33 @@ function legalMoves(move_options, t) {
         }) : t.moves({
           verbose: /* true */1
         });
-  return $$Array.map(unimplemented, raw_full_moves);
+  console.log(raw_full_moves);
+  return $$Array.map(ofRaw$3, raw_full_moves);
 }
 
 function move(t, req) {
   var parseResponse = function (r) {
-    return Belt_Option.map((r == null) ? /* None */0 : [r], unimplemented);
+    return Belt_Option.map((r == null) ? /* None */0 : [r], ofRaw$3);
   };
   switch (req.tag | 0) {
     case 0 : 
         return parseResponse(t.move(req[0]));
     case 1 : 
-        return parseResponse(t.move(unimplemented(req[0])));
+        return parseResponse(t.move(toRaw$2(req[0])));
     case 2 : 
-        return parseResponse(Caml_missing_polyfill.not_implemented("move not implemented by bucklescript yet\n"));
+        return parseResponse(t.move(req[0][/* san */5]));
     
   }
 }
 
-var Api = /* module */[
-  /* Color */Color,
-  /* File */File,
-  /* Square */Square,
-  /* Piece */Piece,
-  /* create */create,
-  /* ascii */ascii,
-  /* fen */fen,
-  /* gameOver */gameOver,
-  /* get */get,
-  /* Move */Move,
-  /* legalMoves */legalMoves,
-  /* move */move
-];
+function loadPgn(sloppy, t, pgn) {
+  var sloppy$1 = Js_null_undefined.fromOption(Belt_Option.map(sloppy, (function (s) {
+              return {
+                      sloppy: s
+                    };
+            })));
+  return +t.load_pgn(pgn, sloppy$1);
+}
 
 var chess = create(/* None */0, /* () */0);
 
@@ -321,7 +313,30 @@ console.log(chess.ascii());
 
 console.log(chess.fen());
 
-var chess$1 = create(/* Some */["r1k4r/p2nb1p1/2b4p/1p1n1p2/2PP4/3Q1NB1/1P3PPP/R5K1 b - c3 0 19"], /* () */0);
+var chess$1 = create(/* Some */["6nr/3p2pp/5Q2/3b2B1/1nk1PPBP/p4Np1/p5R1/1R1K1N2 b - - 2 40"], /* () */0);
+
+var full_move = /* record */[
+  /* color : Black */0,
+  /* from : record */[
+    /* file : a */97,
+    /* rank */2
+  ],
+  /* to_ : record */[
+    /* file : a */97,
+    /* rank */1
+  ],
+  /* flags */"np",
+  /* piece : pawn */-900601784,
+  /* san */"a1=B"
+];
+
+console.log(chess$1.ascii());
+
+console.log(toRaw$3(full_move));
+
+console.log(Belt_Option.map(move(chess$1, /* Full */Block.__(2, [full_move])), toRaw$3));
+
+console.log(chess$1.ascii());
 
 console.log(chess$1.ascii());
 
@@ -382,20 +397,18 @@ function play_random_game(t) {
   Random.self_init(/* () */0);
   var t$1 = t;
   while(true) {
+    console.log(t$1.fen());
+    console.log(t$1.ascii());
     if (t$1.game_over()) {
       console.log("Game over");
       return /* () */0;
     } else {
       var moves = legalMoves(/* None */0, t$1);
-      console.log("legal moves:");
-      $$Array.iter((function (prim) {
-              console.log(prim);
-              return /* () */0;
-            }), moves);
       var selected_move = Caml_array.caml_array_get(moves, Random.$$int(moves.length));
+      console.log("selecting move:");
+      console.log(toRaw$3(selected_move));
       var match = move(t$1, /* Full */Block.__(2, [selected_move]));
       if (match) {
-        console.log(t$1.ascii());
         continue ;
         
       } else {
@@ -408,17 +421,25 @@ function play_random_game(t) {
 
 play_random_game(create(/* None */0, /* () */0));
 
-var Tests = /* module */[
-  /* chess */chess$1,
-  /* allSquares */allSquares,
-  /* allPieces */allPieces,
-  /* play_random_game */play_random_game
+var Color = [toString];
+
+var Piece_000 = [toString$3];
+
+var Piece = [
+  Piece_000,
+  toString$4
 ];
 
-exports.unimplemented = unimplemented;
-exports.Raw = Raw;
-exports.List = List$1;
-exports.Api = Api;
+var Move_000 = [];
+
+var Move_001 = [];
+
+var Move = [
+  Move_000,
+  Move_001,
+  Options
+];
+
 exports.Color = Color;
 exports.File = File;
 exports.Square = Square;
@@ -431,5 +452,5 @@ exports.get = get;
 exports.Move = Move;
 exports.legalMoves = legalMoves;
 exports.move = move;
-exports.Tests = Tests;
+exports.loadPgn = loadPgn;
 /* chess Not a pure module */
