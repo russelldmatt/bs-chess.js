@@ -257,6 +257,8 @@ module Api = {
       let toRaw: t => Raw.from_to = t => {"from": t.from, "to": t.to_};
     };
     module Full = {
+      /* CR mrussell: Want to expose the tToJs function without exposing another full type. */
+      [@bs.deriving jsConverter]
       type t = {
         color: Color.t,
         from: Square.t,
