@@ -368,10 +368,9 @@ module Api = {
                   InsufficientMaterial :
                   inDraw(t) ?
                     FiftyMoveRule :
-                    {
-                      Js.log(ascii(t));
-                      Js.Exn.raiseError("game over but not sure why");
-                    },
+                    Js.Exn.raiseError(
+                      "LIBRARY BUG: game is over but can't detect the end state",
+                    ),
         );
       } else {
         None;
