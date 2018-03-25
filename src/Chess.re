@@ -1,7 +1,11 @@
+/* Useful for stubbing out things while implementing */
 /* let unimplemented = x => { */
 /*   Js.log(x); */
 /*   Js.Exn.raiseError("Unimplemented"); */
 /* }; */
+/* forward compose */
+let (>>) = (f, g, x) => f(g(x));
+
 module Raw = {
   /* Raw is a literal translation of the chess.js API */
   type chess;
@@ -131,6 +135,7 @@ module Api = {
       | Black => "black"
       | White => "white"
       };
+    let toJson = t : Js.Json.t => Js.Json.string @@ toString(t);
   };
   module File = {
     type t = [ | `a | `b | `c | `d | `e | `f | `g | `h];
@@ -163,10 +168,12 @@ module Api = {
     let ofString = s => ofChar(s.[0]);
     let toString = t => t |> toChar |> String.ofChar;
     let all: list(t) = [`a, `b, `c, `d, `e, `f, `g, `h];
+    let toJson = t : Js.Json.t => t |> toString |> Js.Json.string;
   };
   module Rank = {
     type t = int;
     let all = List.init(8, x => x + 1);
+    let toJson = t : Js.Json.t => t |> float_of_int |> Js.Json.number;
   };
   module Square = {
     type t = {
@@ -181,6 +188,7 @@ module Api = {
       file: s.[0] |> File.ofChar,
       rank: s.[1] |> String.ofChar |> int_of_string,
     };
+    let toJson: t => Js.Json.t = Js.Json.string >> toString;
   };
   module Piece = {
     module Type = {
@@ -216,6 +224,7 @@ module Api = {
         | `rook => "rook"
         | `pawn => "pawn"
         };
+      let toJson = t : Js.Json.t => Js.Json.string @@ toString @@ t;
     };
     type t = {
       type_: Type.t,
@@ -232,6 +241,12 @@ module Api = {
     };
     let toString = t =>
       Color.toString(t.color) ++ " " ++ Type.toString(t.type_);
+    let toJson = t : Js.Json.t => {
+      let {type_, color} = t;
+      [("type_", Type.toJson(type_)), ("color", Color.toJson(color))]
+      |> Js.Dict.fromList
+      |> Js.Json.object_;
+    };
   };
   type t = Raw.chess;
   let create = (~fen=?, ()) =>
@@ -266,6 +281,19 @@ module Api = {
         flags: string,
         piece: Piece.Type.t,
         san,
+      };
+      let toJson = t : Js.Json.t => {
+        let {color, from, to_, flags, piece, san} = t;
+        [
+          ("color", Color.toJson(color)),
+          ("from", Square.toJson(from)),
+          ("to_", Square.toJson(to_)),
+          ("flags", Js.Json.string(flags)),
+          ("piece", Piece.Type.toJson(piece)),
+          ("san", Js.Json.string(san)),
+        ]
+        |> Js.Dict.fromList
+        |> Js.Json.object_;
       };
       let ofRaw: Raw.full_move => t =
         raw => {

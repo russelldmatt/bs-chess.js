@@ -37,10 +37,10 @@ let full_move = {
 /* ); */
 Js.log(ascii(chess));
 
-Js.log(Move.Full.toRaw(full_move));
+Js.log(Move.Full.toJson(full_move));
 
 Js.log(
-  move(chess, Move.Full(full_move)) |. Belt.Option.map(Move.Full.toRaw),
+  move(chess, Move.Full(full_move)) |. Belt.Option.map(Move.Full.toJson),
 );
 
 Js.log(ascii(chess));
@@ -92,10 +92,10 @@ let play_random_game = (~print=false, t: t) => {
     } else {
       let moves = legalMoves(t);
       /* Js.log("legal moves:"); */
-      /* Array.iter(Js.log, Array.map(Move.Full.toRaw, moves)); */
+      /* Array.iter(Js.log, Array.map(Move.Full.toJson, moves)); */
       let selected_move = moves[Random.int(Array.length(moves))];
       print ? Js.log("selecting move:") : ();
-      print ? Js.log(Move.Full.toRaw(selected_move)) : ();
+      print ? Js.log(Move.Full.toJson(selected_move)) : ();
       switch (move(t, Move.Full(selected_move))) {
       | Some(_) => loop(t)
       | None => Js.log("error")
@@ -140,4 +140,4 @@ let rec check_for_game_over_but_no_end_state = n =>
     };
   };
 
-check_for_game_over_but_no_end_state(5);
+check_for_game_over_but_no_end_state(2);

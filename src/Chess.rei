@@ -1,9 +1,3 @@
-module Raw: {
-  /* Only exposing types here, because logging these is generally much
-     more understandable than logging the reason values. */
-  type full_move;
-};
-
 type t;
 
 type successOrFail = [ | `success | `fail];
@@ -40,6 +34,7 @@ module Color: {
     | Black
     | White;
   let toString: t => string;
+  let toJson: t => Js.Json.t;
 };
 
 module File: {
@@ -48,10 +43,11 @@ module File: {
   let ofChar: char => t;
   let ofString: string => t;
   let toString: t => string;
+  let toJson: t => Js.Json.t;
   let all: list(t);
 };
 
-module Rank: {type t = int; let all: list(t);};
+module Rank: {type t = int; let all: list(t); let toJson: t => Js.Json.t;};
 
 module Square: {
   type t = {
@@ -60,18 +56,21 @@ module Square: {
   };
   let toString: t => string;
   let ofString: string => t;
+  let toJson: t => Js.Json.t;
 };
 
 module Piece: {
   module Type: {
     type t = [ | `king | `queen | `bishop | `knight | `rook | `pawn];
     let toString: t => string;
+    let toJson: t => Js.Json.t;
   };
   type t = {
     type_: Type.t,
     color: Color.t,
   };
   let toString: t => string;
+  let toJson: t => Js.Json.t;
 };
 
 module EndState: {
@@ -112,7 +111,7 @@ module Move: {
       piece: Piece.Type.t,
       san,
     };
-    let toRaw: t => Raw.full_move;
+    let toJson: t => Js.Json.t;
   };
   type t =
     | SAN(string)
