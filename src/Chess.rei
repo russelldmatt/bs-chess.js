@@ -1,4 +1,9 @@
-/* Api is the api that I'd like to expose.  chess.js, ocamlified. */
+module Raw: {
+  /* Only exposing types here, because logging these is generally much
+     more understandable than logging the reason values. */
+  type full_move;
+};
+
 type t;
 
 type successOrFail = [ | `success | `fail];
@@ -76,6 +81,8 @@ module EndState: {
     | ThreefoldRepetition
     | InsufficientMaterial
     | FiftyMoveRule;
+  include Belt_Id.Hashable with type t := t;
+  let toString: t => string;
 };
 
 let endState: t => option(EndState.t);
@@ -105,6 +112,7 @@ module Move: {
       piece: Piece.Type.t,
       san,
     };
+    let toRaw: t => Raw.full_move;
   };
   type t =
     | SAN(string)
