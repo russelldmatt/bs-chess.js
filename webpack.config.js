@@ -2,7 +2,7 @@ const path = require('path');
 const outputDir = path.join(__dirname, "build/");
 
 module.exports = {
-  entry: './src/Chess.bs.js',
+  entry: './src/Test.bs.js',
   mode: 'development',
   output: {
     path: outputDir,

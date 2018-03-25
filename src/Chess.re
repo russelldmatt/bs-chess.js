@@ -304,15 +304,15 @@ module Api = {
           piece: Piece.Type.ofRaw(raw##piece),
           san: raw##san,
         };
-      let toRaw: t => Raw.full_move =
-        t => {
-          "color": Color.toRaw(t.color),
-          "from": Square.toString(t.from),
-          "_to": Square.toString(t.to_),
-          "flags": t.flags,
-          "piece": Piece.Type.toRaw(t.piece),
-          "san": t.san,
-        };
+      /* let toRaw: t => Raw.full_move = */
+      /*   t => { */
+      /*     "color": Color.toRaw(t.color), */
+      /*     "from": Square.toString(t.from), */
+      /*     "_to": Square.toString(t.to_), */
+      /*     "flags": t.flags, */
+      /*     "piece": Piece.Type.toRaw(t.piece), */
+      /*     "san": t.san, */
+      /*   }; */
     };
     type t =
       | SAN(string)
