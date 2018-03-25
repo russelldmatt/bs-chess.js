@@ -1,15 +1,19 @@
-let unimplemented = x => {
-  Js.log(x);
-  Js.Exn.raiseError("Unimplemented");
-};
-
+/* let unimplemented = x => { */
+/*   Js.log(x); */
+/*   Js.Exn.raiseError("Unimplemented"); */
+/* }; */
 module Raw = {
   /* Raw is a literal translation of the chess.js API */
   type chess;
   type fen = string;
   type pgn = string;
   type color = string;
-  type piece = Js.Dict.t(string);
+  type piece = {
+    .
+    "type": string,
+    "color": string,
+  };
+  [@bs.get_index] external getType : (piece, [@bs.as "type"] _) => string = "";
   type square = string;
   type san = string;
   type from_to = {
@@ -17,8 +21,6 @@ module Raw = {
     "from": string,
     "to": string,
   };
-  [@bs.get_index]
-  external getToFromFromTo : (from_to, [@bs.as "to"] _) => string = "";
   type full_move = {
     .
     "color": color,
@@ -28,11 +30,9 @@ module Raw = {
     "piece": string, /* Not the same as piece type */
     "san": san,
   };
-  [@bs.get_index]
-  external getToFromFullMove : (full_move, [@bs.as "to"] _) => string = "";
-  type header;
-  type turn = string;
-  type validation;
+  [@bs.get_index] external getTo : (full_move, [@bs.as "to"] _) => string = "";
+  type header = Js.Dict.t(string);
+  type validation = Js.Dict.t(string);
   [@bs.new] [@bs.module]
   external createForBrowser : (~fen: fen=?, unit) => chess = "chess.js";
   [@bs.new] [@bs.module "chess.js"]
@@ -54,7 +54,7 @@ module Raw = {
   [@bs.send] external addToHeader : (chess, string, string) => unit = "header";
   [@bs.send] external header : chess => header = "";
   [@bs.send] external insufficient_material : chess => bool = "";
-  [@bs.send] external load : (chess, fen) => unit = "";
+  [@bs.send] external load : (chess, fen) => bool = "";
   type sloppy = {. "sloppy": bool};
   [@bs.send]
   external load_pgn : (chess, pgn, Js.nullable(sloppy), unit) => bool = "";
@@ -85,7 +85,7 @@ module Raw = {
   [@bs.send] external remove : (chess, square) => Js.nullable(piece) = "";
   [@bs.send] external reset : chess => unit = "";
   [@bs.send] external square_color : (chess, square) => color = "";
-  [@bs.send] external turn : chess => turn = "";
+  [@bs.send] external turn : chess => color = "";
   [@bs.send] external undo : chess => Js.nullable(full_move) = "";
   [@bs.send] external validate_fen : (chess, fen) => validation = "";
 };
@@ -103,6 +103,11 @@ module String = {
 };
 
 module Api = {
+  module SuccessOrFail = {
+    type t = [ | `success | `fail];
+    let ofBool = b : t => b ? `success : `fail;
+  };
+  type successOrFail = SuccessOrFail.t;
   /* Api is the api that I'd like to expose.  chess.js, ocamlified. */
   type fen = Raw.fen;
   type pgn = Raw.pgn;
@@ -163,10 +168,14 @@ module Api = {
     let toString = t => t |> toChar |> String.ofChar;
     let all: list(t) = [`a, `b, `c, `d, `e, `f, `g, `h];
   };
+  module Rank = {
+    type t = int;
+    let all = List.init(8, x => x + 1);
+  };
   module Square = {
     type t = {
       file: File.t,
-      rank: int,
+      rank: Rank.t,
     };
     let toString = t => {
       let {file, rank} = t;
@@ -218,9 +227,13 @@ module Api = {
     };
     let ofRaw: Raw.piece => t =
       raw => {
-        type_: Js.Dict.get(raw, "type") |> Js.Option.getExn |> Type.ofRaw,
-        color: Color.ofRaw(Js.Dict.get(raw, "color") |> Js.Option.getExn),
+        type_: Raw.getType(raw) |> Type.ofRaw,
+        color: Color.ofRaw(raw##color),
       };
+    let toRaw = t : Raw.piece => {
+      "type": t.type_ |> Type.toRaw,
+      "color": t.color |> Color.toRaw,
+    };
     let toString = t =>
       Color.toString(t.color) ++ " " ++ Type.toString(t.type_);
   };
@@ -232,11 +245,9 @@ module Api = {
     };
   let ascii = Raw.ascii;
   let fen = Raw.fen;
-  let gameOver = Raw.game_over;
   let get: (t, Square.t) => option(Piece.t) =
     (t, square) => {
       let rawSquare = square |> Square.toString;
-      Js.log2("raw square: ", rawSquare);
       let raw = Raw.get(t, rawSquare) |> Js.Nullable.toOption;
       Belt.Option.map(raw, Piece.ofRaw);
     };
@@ -262,7 +273,7 @@ module Api = {
         raw => {
           color: Color.ofRaw(raw##color),
           from: Square.ofString(raw##from),
-          to_: Square.ofString(Raw.getToFromFullMove(raw)),
+          to_: Square.ofString(Raw.getTo(raw)),
           flags: raw##flags,
           piece: Piece.Type.ofRaw(raw##piece),
           san: raw##san,
@@ -296,7 +307,6 @@ module Api = {
           {"square": Square.toString(square), "verbose": true},
         )
       };
-    Js.log(raw_full_moves);
     Array.map(Move.Full.ofRaw, raw_full_moves);
   };
   let move: (t, Move.t) => option(Move.Full.t) =
@@ -313,92 +323,94 @@ module Api = {
   let loadPgn = (~sloppy=?, t, pgn) => {
     let sloppy =
       Belt.Option.map(sloppy, s => {"sloppy": s}) |> Js.Nullable.fromOption;
-    Raw.load_pgn(t, pgn, sloppy, ());
+    Raw.load_pgn(t, pgn, sloppy, ()) |> SuccessOrFail.ofBool;
   };
+  module EndState = {
+    module T = {
+      type t =
+        | Checkmate
+        | Stalemate
+        | ThreefoldRepetition
+        | InsufficientMaterial
+        | FiftyMoveRule;
+      /* CR mrussell: easier way? */
+      let hash = t : int =>
+        switch (t) {
+        | Checkmate => 0
+        | Stalemate => 1
+        | ThreefoldRepetition => 2
+        | InsufficientMaterial => 3
+        | FiftyMoveRule => 4
+        };
+      let eq = (t1, t2) => t1 == t2;
+    };
+    include T;
+    include (Belt_Id.MakeHashable(T): Belt_Id.Hashable with type t := t);
+    let toString = t : string =>
+      switch (t) {
+      | Checkmate => "Checkmate"
+      | Stalemate => "Stalemate"
+      | ThreefoldRepetition => "ThreefoldRepetition"
+      | InsufficientMaterial => "InsufficientMaterial"
+      | FiftyMoveRule => "FiftyMoveRule"
+      };
+  };
+  let inCheck = Raw.in_check;
+  let gameOver = Raw.game_over;
+  let inDraw = Raw.in_draw;
+  let endState: t => option(EndState.t) =
+    t =>
+      if (Raw.game_over(t)) {
+        Some(
+          Raw.in_checkmate(t) ?
+            Checkmate :
+            Raw.in_stalemate(t) ?
+              Stalemate :
+              Raw.in_threefold_repetition(t) ?
+                ThreefoldRepetition :
+                Raw.insufficient_material(t) ?
+                  InsufficientMaterial :
+                  inDraw(t) ?
+                    FiftyMoveRule :
+                    {
+                      Js.log(ascii(t));
+                      Js.Exn.raiseError("game over but not sure why");
+                    },
+        );
+      } else {
+        None;
+      };
+  let undo = t =>
+    t |> Raw.undo |> Js.Nullable.toOption |. Belt.Option.map(Move.Full.ofRaw);
+  type kv = {
+    key: string,
+    value: string,
+  };
+  let addToPgnHeader = (t, key_value) =>
+    Raw.addToHeader(t, key_value.key, key_value.value);
+  let pgnHeader = Raw.header;
+  let pgn = Raw.pgn;
+  let turn = t => t |> Raw.turn |> Color.ofRaw;
+  let remove = (t, square) =>
+    Raw.remove(t, Square.toString(square))
+    |> Js.Nullable.toOption
+    |. Belt.Option.map(Piece.ofRaw);
+  let put = (t, piece, square) =>
+    Raw.put(t, Piece.toRaw(piece), Square.toString(square))
+    |> SuccessOrFail.ofBool;
+  let validateFen = Raw.validate_fen;
+  let loadFen = (t, fen) : Js.Result.t(unit, Js.Dict.t(string)) =>
+    Raw.load(t, fen) ? Ok() : Error(validateFen(t, fen));
+  let historySan = t => Raw.history(t);
+  let historyFull = t =>
+    Raw.history_verbose(t, {"verbose": true})
+    |> Array.map(raw_full_move => Move.Full.ofRaw(raw_full_move));
+  let reset = Raw.reset;
+  /* Explicitly ignore a few raw things that don't seem that useful  */
+  let _ = Raw.square_color; /* When would you need that? */
+  let _ = Raw.moves_for_square; /* Just always use verbose */
+  let _ = Raw.moves; /* Just always use verbose */
+  let _ = Raw.clear; /* Just create a new one? */
 };
 
 include Api;
-
-module Tests = {
-  let chess = create();
-  Js.log(ascii(chess));
-  Js.log(fen(chess));
-  let chess = {
-    let fen = "6nr/3p2pp/5Q2/3b2B1/1nk1PPBP/p4Np1/p5R1/1R1K1N2 b - - 2 40";
-    create(~fen, ());
-  };
-  let full_move = {
-    Move.Full.color: Color.Black,
-    from: {
-      Square.file: `a,
-      rank: 2,
-    },
-    to_: {
-      Square.file: `a,
-      rank: 1,
-    },
-    flags: "np",
-    piece: `pawn,
-    san: "a1=B",
-  };
-  /* Move.Full.ofRaw( */
-  /*   [%raw {|{ color: 'b', from: 'f2', to: 'f1', flags: 'np', piece: 'p' }|}], */
-  /* ); */
-  Js.log(ascii(chess));
-  Js.log(Move.Full.toRaw(full_move));
-  Js.log(
-    move(chess, Move.Full(full_move)) |. Belt.Option.map(Move.Full.toRaw),
-  );
-  Js.log(ascii(chess));
-  Js.log(ascii(chess));
-  Js.log("hey");
-  Js.log(ascii(chess));
-  Js.log(gameOver(chess));
-  Js.log(get(chess, {Square.file: `e, rank: 8}));
-  Js.log(get(chess, {Square.file: `e, rank: 1}));
-  Js.log(
-    get(chess, {Square.file: `g, rank: 2})
-    |. Belt.Option.map(Piece.toString),
-  );
-  let allSquares: list(Square.t) = {
-    let allRanks = List.init(8, x => x + 1);
-    File.all
-    |> List.bind(file => allRanks |> List.map(rank => {Square.file, rank}));
-  };
-  Js.log("gettin all squares");
-  let allPieces: list((Square.t, Piece.t)) =
-    allSquares
-    |. List.filter_map(square =>
-         Belt.Option.map(get(chess, square), piece => (square, piece))
-       );
-  Js.log(ascii(chess));
-  allPieces
-  |> List.iter(((square, piece)) =>
-       Js.log3(Square.toString(square), ":", Piece.toString(piece))
-     );
-  let play_random_game = (t: t) => {
-    Js.log("about to play random game");
-    Random.self_init();
-    /* random game */
-    let rec loop = t => {
-      Js.log(fen(t));
-      Js.log(ascii(t));
-      if (gameOver(t)) {
-        Js.log("Game over");
-      } else {
-        let moves = legalMoves(t);
-        /* Js.log("legal moves:"); */
-        /* Array.iter(Js.log, Array.map(Move.Full.toRaw, moves)); */
-        let selected_move = moves[Random.int(Array.length(moves))];
-        Js.log("selecting move:");
-        Js.log(Move.Full.toRaw(selected_move));
-        switch (move(t, Move.Full(selected_move))) {
-        | Some(_) => loop(t)
-        | None => Js.log("error")
-        };
-      };
-    };
-    loop(t);
-  };
-  play_random_game(create());
-};
