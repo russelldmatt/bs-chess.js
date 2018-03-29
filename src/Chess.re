@@ -34,7 +34,12 @@ module Raw = {
     "san": san,
   };
   type header = Js.Dict.t(string);
-  type validation = Js.Dict.t(string);
+  type validation = {
+    .
+    "valid": Js.boolean,
+    "error_number": int,
+    "error": string,
+  };
   [@bs.new] [@bs.module]
   external createForBrowser : (~fen: fen=?, unit) => chess = "chess.js";
   [@bs.new] [@bs.module "chess.js"]
@@ -44,7 +49,7 @@ module Raw = {
   [@bs.send] external fen : chess => fen = "";
   [@bs.send] external game_over : chess => bool = "";
   [@bs.send] external get : (chess, square) => Js.nullable(piece) = "";
-  type verbose = {. "verbose": bool};
+  type verbose = {. "verbose": Js.boolean};
   [@bs.send] external history : chess => array(san) = "";
   [@bs.send]
   external history_verbose : (chess, verbose) => array(full_move) = "history";
@@ -57,7 +62,7 @@ module Raw = {
   [@bs.send] external header : chess => header = "";
   [@bs.send] external insufficient_material : chess => bool = "";
   [@bs.send] external load : (chess, fen) => bool = "";
-  type sloppy = {. "sloppy": bool};
+  type sloppy = {. "sloppy": Js.boolean};
   [@bs.send]
   external load_pgn : (chess, pgn, Js.nullable(sloppy), unit) => bool = "";
   [@bs.send]
@@ -74,7 +79,7 @@ module Raw = {
   type for_square_verbose = {
     .
     "square": square,
-    "verbose": bool,
+    "verbose": Js.boolean,
   };
   [@bs.send]
   external moves_for_square : (chess, for_square) => array(san) = "moves";
@@ -102,14 +107,13 @@ module String = {
   let ofChar = c => String.make(1, c);
 };
 
+/* chess.js, ocamlified. */
 module Api = {
   module SuccessOrFail = {
     type t = [ | `success | `fail];
     let ofBool = b : t => b ? `success : `fail;
   };
   type successOrFail = SuccessOrFail.t;
-  /* Api is the api that I'd like to expose.  chess.js, ocamlified. */
-  type fen = Raw.fen;
   type pgn = Raw.pgn;
   module Color = {
     type t =
@@ -254,6 +258,38 @@ module Api = {
     | None => Raw.createForNode(~fen?, ())
     | Some(_) => Raw.createForBrowser(~fen?, ())
     };
+  module Fen = {
+    type t = Raw.fen;
+    type error = {
+      error_number: int,
+      error: string,
+    };
+    let error_of_validation = validation => {
+      error_number: validation##error_number,
+      error: validation##error,
+    };
+    let ofString = s : Js.Result.t(t, error) => {
+      let t = create();
+      let validation = Raw.validate_fen(t, s);
+      Js.log(validation);
+      let valid: bool = Js.to_bool(validation##valid);
+      valid ?
+        Js.Result.Ok(s) : Js.Result.Error(validation |> error_of_validation);
+    };
+    let ofStringExn = s =>
+      switch (ofString(s)) {
+      | Ok(t) =>
+        Js.log("ok fen: " ++ s);
+        t;
+      | Error(error) =>
+        Printf.sprintf(
+          "{ error_number: %d, error: %s }",
+          error.error_number,
+          error.error,
+        )
+        |> Js.Exn.raiseError
+      };
+  };
   let ascii = Raw.ascii;
   let fen = Raw.fen;
   let get: (t, Square.t) => option(Piece.t) =
@@ -314,6 +350,7 @@ module Api = {
       /*     "san": t.san, */
       /*   }; */
     };
+    [@bs.deriving accessors]
     type t =
       | SAN(string)
       | From_to(From_to.t)
@@ -326,11 +363,15 @@ module Api = {
     let square = Belt.Option.flatMap(move_options, x => x.Move.Options.square);
     let raw_full_moves =
       switch (square) {
-      | None => Raw.moves_verbose(t, {"verbose": true})
+      | None =>
+        Raw.moves_verbose(t, {"verbose": Js.Boolean.to_js_boolean(true)})
       | Some(square) =>
         Raw.moves_for_square_verbose(
           t,
-          {"square": Square.toString(square), "verbose": true},
+          {
+            "square": Square.toString(square),
+            "verbose": Js.Boolean.to_js_boolean(true),
+          },
         )
       };
     Array.map(Move.Full.ofRaw, raw_full_moves);
@@ -348,7 +389,8 @@ module Api = {
     };
   let loadPgn = (~sloppy=?, t, pgn) => {
     let sloppy =
-      Belt.Option.map(sloppy, s => {"sloppy": s}) |> Js.Nullable.fromOption;
+      Belt.Option.map(sloppy, s => {"sloppy": Js.Boolean.to_js_boolean(s)})
+      |> Js.Nullable.fromOption;
     Raw.load_pgn(t, pgn, sloppy, ()) |> SuccessOrFail.ofBool;
   };
   module EndState = {
@@ -359,15 +401,7 @@ module Api = {
         | ThreefoldRepetition
         | InsufficientMaterial
         | FiftyMoveRule;
-      /* CR mrussell: easier way? */
-      let hash = t : int =>
-        switch (t) {
-        | Checkmate => 0
-        | Stalemate => 1
-        | ThreefoldRepetition => 2
-        | InsufficientMaterial => 3
-        | FiftyMoveRule => 4
-        };
+      let hash = t : int => Hashtbl.hash(t);
       let eq = (t1, t2) => t1 == t2;
     };
     include T;
@@ -423,12 +457,12 @@ module Api = {
   let put = (t, piece, square) =>
     Raw.put(t, Piece.toRaw(piece), Square.toString(square))
     |> SuccessOrFail.ofBool;
-  let validateFen = Raw.validate_fen;
-  let loadFen = (t, fen) : Js.Result.t(unit, Js.Dict.t(string)) =>
-    Raw.load(t, fen) ? Ok() : Error(validateFen(t, fen));
+  let loadFen = (t, fen) : unit =>
+    Raw.load(t, fen) ?
+      () : Js.Exn.raiseError("BUG: load didn't work on a valid fen");
   let historySan = t => Raw.history(t);
   let historyFull = t =>
-    Raw.history_verbose(t, {"verbose": true})
+    Raw.history_verbose(t, {"verbose": Js.Boolean.to_js_boolean(true)})
     |> Array.map(raw_full_move => Move.Full.ofRaw(raw_full_move));
   let reset = Raw.reset;
   /* Explicitly ignore a few raw things that don't seem that useful  */

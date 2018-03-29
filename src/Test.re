@@ -13,7 +13,10 @@ Js.log(ascii(chess));
 Js.log(fen(chess));
 
 let chess = {
-  let fen = "6nr/3p2pp/5Q2/3b2B1/1nk1PPBP/p4Np1/p5R1/1R1K1N2 b - - 2 40";
+  let fen =
+    Fen.ofStringExn(
+      "6nr/3p2pp/5Q2/3b2B1/1nk1PPBP/p4Np1/p5R1/1R1K1N2 b - - 2 40",
+    );
   create(~fen, ());
 };
 

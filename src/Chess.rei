@@ -2,17 +2,23 @@ type t;
 
 type successOrFail = [ | `success | `fail];
 
-type fen = string;
+module Fen: {
+  type t;
+  type error = {
+    error_number: int,
+    error: string,
+  };
+  let ofString: string => Js.Result.t(t, error);
+  let ofStringExn: string => t;
+};
 
 type pgn = string;
 
-let create: (~fen: fen=?, unit) => t;
+let create: (~fen: Fen.t=?, unit) => t;
 
-let validateFen: (t, fen) => Js.Dict.t(string);
+let loadFen: (t, Fen.t) => unit;
 
-let loadFen: (t, fen) => Js.Result.t(unit, Js.Dict.t(string));
-
-let fen: t => fen;
+let fen: t => Fen.t;
 
 let loadPgn: (~sloppy: bool=?, t, pgn) => successOrFail;
 
@@ -113,6 +119,7 @@ module Move: {
     };
     let toJson: t => Js.Json.t;
   };
+  [@bs.deriving accessors]
   type t =
     | SAN(string)
     | From_to(From_to.t)
