@@ -36,6 +36,11 @@ npm install && npm build && npm start
 ```
 
 ## To get this repo working:
+### Clone
+```
+git clone https://github.com/russelldmatt/bs-chess.js.git bs-chess.js
+```
+
 ### Build
 ```
 yarn install
