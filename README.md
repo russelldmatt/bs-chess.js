@@ -25,6 +25,7 @@ npm install --save russelldmatt/bs-chess.js
 
 # Add this library to the bsconfig.json `bs-dependencies` section.
 # It should look something like this: "bs-dependencies": [ "bs-chess.js"],
+# (you have to do this manually)
 
 # all the normal npm stuff
 npm install && npm build && npm start
