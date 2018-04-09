@@ -4,8 +4,7 @@
 /*   Js.Exn.raiseError("Unimplemented"); */
 /* }; */
 /* forward compose */
-let (>>) = (f, g, x) => f(g(x));
-
+/* let (>>) = (f, g, x) => g(f(x)); */
 module Raw = {
   /* Raw is a literal translation of the chess.js API */
   type chess;
@@ -97,6 +96,12 @@ module Raw = {
   [@bs.send] external validate_fen : (chess, fen) => validation = "";
 };
 
+module type Jsonable = {
+  type t;
+  let toJson: t => Js.Json.t;
+  let ofJson: Js.Json.t => t;
+};
+
 module List = {
   include List;
   let init = (n, f) => Array.init(n, f) |> Array.to_list;
@@ -139,7 +144,14 @@ module Api = {
       | Black => "black"
       | White => "white"
       };
-    let toJson = t : Js.Json.t => Js.Json.string @@ toString(t);
+    let ofString = str =>
+      switch (str) {
+      | "black" => Black
+      | "white" => White
+      | str => Js.Exn.raiseError("Cannot convert Color.t from str: " ++ str)
+      };
+    let toJson = t : Js.Json.t => Json.Encode.(t |> toString |> string);
+    let ofJson = json : t => Json.Decode.(json |> string |> ofString);
   };
   module File = {
     type t = [ | `a | `b | `c | `d | `e | `f | `g | `h];
@@ -172,12 +184,14 @@ module Api = {
     let ofString = s => ofChar(s.[0]);
     let toString = t => t |> toChar |> String.ofChar;
     let all: list(t) = [`a, `b, `c, `d, `e, `f, `g, `h];
-    let toJson = t : Js.Json.t => t |> toString |> Js.Json.string;
+    let toJson = t : Js.Json.t => Json.Encode.(t |> toString |> string);
+    let ofJson = json : t => Json.Decode.(json |> string |> ofString);
   };
   module Rank = {
     type t = int;
     let all = List.init(8, x => x + 1);
-    let toJson = t : Js.Json.t => t |> float_of_int |> Js.Json.number;
+    let toJson = t : Js.Json.t => Json.Encode.(t |> int);
+    let ofJson = json : t => Json.Decode.(json |> int);
   };
   module Square = {
     type t = {
@@ -192,7 +206,8 @@ module Api = {
       file: s.[0] |> File.ofChar,
       rank: s.[1] |> String.ofChar |> int_of_string,
     };
-    let toJson: t => Js.Json.t = Js.Json.string >> toString;
+    let toJson = t : Js.Json.t => Json.Encode.(t |> toString |> string);
+    let ofJson = json : t => Json.Decode.(json |> string |> ofString);
   };
   module Piece = {
     module Type = {
@@ -228,7 +243,19 @@ module Api = {
         | `rook => "rook"
         | `pawn => "pawn"
         };
-      let toJson = t : Js.Json.t => Js.Json.string @@ toString @@ t;
+      let ofString = str =>
+        switch (str) {
+        | "king" => `king
+        | "queen" => `queen
+        | "bishop" => `bishop
+        | "knight" => `knight
+        | "rook" => `rook
+        | "pawn" => `pawn
+        | str =>
+          Js.Exn.raiseError("Cannot convert Piece.Type.t from str: " ++ str)
+        };
+      let toJson = t : Js.Json.t => Json.Encode.(t |> toString |> string);
+      let ofJson = json : t => Json.Decode.(json |> string |> ofString);
     };
     type t = {
       type_: Type.t,
@@ -246,11 +273,16 @@ module Api = {
     let toString = t =>
       Color.toString(t.color) ++ " " ++ Type.toString(t.type_);
     let toJson = t : Js.Json.t => {
+      open Json.Encode;
       let {type_, color} = t;
       [("type_", Type.toJson(type_)), ("color", Color.toJson(color))]
-      |> Js.Dict.fromList
-      |> Js.Json.object_;
+      |> object_;
     };
+    let ofJson = json : t =>
+      Json.Decode.{
+        type_: json |> field("type_", Type.ofJson),
+        color: json |> field("color", Color.ofJson),
+      };
   };
   type t = Raw.chess;
   let create = (~fen=?, ()) =>
@@ -259,7 +291,7 @@ module Api = {
     | Some(_) => Raw.createForBrowser(~fen?, ())
     };
   module Fen = {
-    type t = Raw.fen;
+    type t = string;
     type error = {
       error_number: int,
       error: string,
@@ -289,6 +321,8 @@ module Api = {
         )
         |> Js.Exn.raiseError
       };
+    let toJson = t : Js.Json.t => Json.Encode.(t |> string);
+    let ofJson = json : t => Json.Decode.(json |> string |> ofStringExn);
   };
   let ascii = Raw.ascii;
   let fen = Raw.fen;
@@ -299,13 +333,27 @@ module Api = {
       Belt.Option.map(raw, Piece.ofRaw);
     };
   module Move = {
-    type san = string;
-    module From_to = {
+    module San = {
+      type t = string;
+      let toJson = t : Js.Json.t => Json.Encode.(t |> string);
+      let ofJson = json : t => Json.Decode.(json |> string);
+    };
+    module FromTo = {
       type t = {
         from: string,
         to_: string,
       };
       let toRaw: t => Raw.from_to = t => {"from": t.from, "to": t.to_};
+      let toJson = t : Js.Json.t => {
+        open Json.Encode;
+        let {from, to_} = t;
+        [("from", string(from)), ("to_", string(to_))] |> object_;
+      };
+      let ofJson = json : t =>
+        Json.Decode.{
+          from: json |> field("from", string),
+          to_: json |> field("to_", string),
+        };
     };
     module Full = {
       /* CR mrussell: Want to expose the tToJs function without exposing another full type. */
@@ -316,9 +364,10 @@ module Api = {
         to_: Square.t,
         flags: string,
         piece: Piece.Type.t,
-        san,
+        san: San.t,
       };
       let toJson = t : Js.Json.t => {
+        open Json.Encode;
         let {color, from, to_, flags, piece, san} = t;
         [
           ("color", Color.toJson(color)),
@@ -328,9 +377,17 @@ module Api = {
           ("piece", Piece.Type.toJson(piece)),
           ("san", Js.Json.string(san)),
         ]
-        |> Js.Dict.fromList
-        |> Js.Json.object_;
+        |> object_;
       };
+      let ofJson = json : t =>
+        Json.Decode.{
+          color: json |> field("color", Color.ofJson),
+          from: json |> field("from", Square.ofJson),
+          to_: json |> field("to_", Square.ofJson),
+          flags: json |> field("flags", string),
+          piece: json |> field("piece", Piece.Type.ofJson),
+          san: json |> field("san", string),
+        };
       let ofRaw: Raw.full_move => t =
         raw => {
           color: Color.ofRaw(raw##color),
@@ -352,9 +409,45 @@ module Api = {
     };
     [@bs.deriving accessors]
     type t =
-      | SAN(string)
-      | From_to(From_to.t)
+      | SAN(San.t)
+      | FromTo(FromTo.t)
       | Full(Full.t);
+    let toJson = t : Js.Json.t =>
+      Json.Encode.(
+        (
+          switch (t) {
+          | SAN(san) => [
+              ("type", string("SAN")),
+              ("value", San.toJson(san)),
+            ]
+          | FromTo(fromTo) => [
+              ("type", string("FromTo")),
+              ("value", FromTo.toJson(fromTo)),
+            ]
+          | Full(full) => [
+              ("type", string("Full")),
+              ("value", Full.toJson(full)),
+            ]
+          }
+        )
+        |> object_
+      );
+    let ofJson = json : t => {
+      open Json.Decode;
+      let decodeValue = (constructor, ofJson, json) =>
+        constructor(json |> field("value", ofJson));
+      let decoder =
+        field("type", string)
+        |> andThen(type_ =>
+             switch (type_) {
+             | "SAN" => decodeValue(sAN, San.ofJson)
+             | "FromTo" => decodeValue(fromTo, FromTo.ofJson)
+             | "Full" => decodeValue(full, Full.ofJson)
+             | _ => Js.Exn.raiseError("unknown move type")
+             }
+           );
+      json |> decoder;
+    };
     module Options = {
       type t = {square: option(Square.t)};
     };
@@ -382,8 +475,8 @@ module Api = {
         r |> Js.Nullable.toOption |. Belt.Option.map(Move.Full.ofRaw);
       switch (req) {
       | Move.SAN(san) => Raw.move_san(t, san) |> parseResponse
-      | From_to(from_to) =>
-        Move.From_to.toRaw(from_to) |> Raw.move_from_to(t) |> parseResponse
+      | FromTo(from_to) =>
+        Move.FromTo.toRaw(from_to) |> Raw.move_from_to(t) |> parseResponse
       | Full(full) => Raw.move_san(t, full.san) |> parseResponse
       };
     };
@@ -414,6 +507,18 @@ module Api = {
       | InsufficientMaterial => "InsufficientMaterial"
       | FiftyMoveRule => "FiftyMoveRule"
       };
+    let ofString = str : t =>
+      switch (str) {
+      | "Checkmate" => Checkmate
+      | "Stalemate" => Stalemate
+      | "ThreefoldRepetition" => ThreefoldRepetition
+      | "InsufficientMaterial" => InsufficientMaterial
+      | "FiftyMoveRule" => FiftyMoveRule
+      | str =>
+        Js.Exn.raiseError("Cannot convert EndState.t from str: " ++ str)
+      };
+    let toJson = t : Js.Json.t => Json.Encode.(t |> toString |> string);
+    let ofJson = json : t => Json.Decode.(json |> string |> ofString);
   };
   let inCheck = Raw.in_check;
   let gameOver = Raw.game_over;

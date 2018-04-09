@@ -2,8 +2,15 @@ type t;
 
 type successOrFail = [ | `success | `fail];
 
+module type Jsonable = {
+  type t;
+  let toJson: t => Js.Json.t;
+  let ofJson: Js.Json.t => t;
+};
+
 module Fen: {
   type t;
+  include Jsonable with type t := t;
   type error = {
     error_number: int,
     error: string,
@@ -39,44 +46,48 @@ module Color: {
   type t =
     | Black
     | White;
+  include Jsonable with type t := t;
   let toString: t => string;
-  let toJson: t => Js.Json.t;
 };
 
 module File: {
   type t = [ | `a | `b | `c | `d | `e | `f | `g | `h];
+  include Jsonable with type t := t;
   let toChar: t => char;
   let ofChar: char => t;
   let ofString: string => t;
   let toString: t => string;
-  let toJson: t => Js.Json.t;
   let all: list(t);
 };
 
-module Rank: {type t = int; let all: list(t); let toJson: t => Js.Json.t;};
+module Rank: {
+  type t = int;
+  include Jsonable with type t := t;
+  let all: list(t);
+};
 
 module Square: {
   type t = {
     file: File.t,
     rank: Rank.t,
   };
+  include Jsonable with type t := t;
   let toString: t => string;
   let ofString: string => t;
-  let toJson: t => Js.Json.t;
 };
 
 module Piece: {
   module Type: {
     type t = [ | `king | `queen | `bishop | `knight | `rook | `pawn];
+    include Jsonable with type t := t;
     let toString: t => string;
-    let toJson: t => Js.Json.t;
   };
   type t = {
     type_: Type.t,
     color: Color.t,
   };
+  include Jsonable with type t := t;
   let toString: t => string;
-  let toJson: t => Js.Json.t;
 };
 
 module EndState: {
@@ -86,6 +97,7 @@ module EndState: {
     | ThreefoldRepetition
     | InsufficientMaterial
     | FiftyMoveRule;
+  include Jsonable with type t := t;
   include Belt_Id.Hashable with type t := t;
   let toString: t => string;
 };
@@ -101,12 +113,13 @@ let inDraw: t => bool;
 let get: (t, Square.t) => option(Piece.t);
 
 module Move: {
-  type san = string;
-  module From_to: {
+  module San: {type t = string; include Jsonable with type t := t;};
+  module FromTo: {
     type t = {
       from: string,
       to_: string,
     };
+    include Jsonable with type t := t;
   };
   module Full: {
     type t = {
@@ -115,15 +128,16 @@ module Move: {
       to_: Square.t,
       flags: string,
       piece: Piece.Type.t,
-      san,
+      san: San.t,
     };
-    let toJson: t => Js.Json.t;
+    include Jsonable with type t := t;
   };
   [@bs.deriving accessors]
   type t =
-    | SAN(string)
-    | From_to(From_to.t)
+    | SAN(San.t)
+    | FromTo(FromTo.t)
     | Full(Full.t);
+  include Jsonable with type t := t;
   module Options: {type t = {square: option(Square.t)};};
 };
 
@@ -139,7 +153,7 @@ let put: (t, Piece.t, Square.t) => successOrFail;
 
 let turn: t => Color.t;
 
-let historySan: t => array(Move.san);
+let historySan: t => array(Move.San.t);
 
 let historyFull: t => array(Move.Full.t);
 
