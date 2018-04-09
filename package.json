@@ -20,6 +20,7 @@
     "webpack-cli": "^2.0.12"
   },
   "dependencies": {
+    "bs-json": "^1.0.1",
     "chess.js": "^0.10.2",
     "webpack": "^4.2.0"
   }
