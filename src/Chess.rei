@@ -19,7 +19,20 @@ module Fen: {
   let ofStringExn: string => t;
 };
 
-type pgn = string;
+module Pgn: {
+  type t = string;
+  module Header: {
+    type t = Js.Dict.t(string);
+    type kv = {
+      key: string,
+      value: string,
+    };
+  };
+};
+
+let header: t => Pgn.Header.t;
+
+let addToHeader: (t, Pgn.Header.kv) => unit;
 
 let create: (~fen: Fen.t=?, unit) => t;
 
@@ -27,18 +40,9 @@ let loadFen: (t, Fen.t) => unit;
 
 let fen: t => Fen.t;
 
-let loadPgn: (~sloppy: bool=?, t, pgn) => successOrFail;
+let loadPgn: (~sloppy: bool=?, t, Pgn.t) => successOrFail;
 
-let pgn: t => pgn;
-
-let pgnHeader: t => Js.Dict.t(string);
-
-type kv = {
-  key: string,
-  value: string,
-};
-
-let addToPgnHeader: (t, kv) => unit;
+let pgn: t => Pgn.t;
 
 let ascii: t => string;
 

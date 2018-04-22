@@ -114,12 +114,26 @@ module String = {
 
 /* chess.js, ocamlified. */
 module Api = {
+  type t = Raw.chess;
   module SuccessOrFail = {
     type t = [ | `success | `fail];
     let ofBool = b : t => b ? `success : `fail;
   };
   type successOrFail = SuccessOrFail.t;
-  type pgn = Raw.pgn;
+  let pgn = Raw.pgn;
+  module Pgn = {
+    type t = Raw.pgn;
+    module Header = {
+      type t = Js.Dict.t(string);
+      type kv = {
+        key: string,
+        value: string,
+      };
+    };
+  };
+  let header = Raw.header;
+  let addToHeader = (t, key_value: Pgn.Header.kv) =>
+    Raw.addToHeader(t, key_value.key, key_value.value);
   module Color = {
     type t =
       | Black
@@ -284,7 +298,6 @@ module Api = {
         color: json |> field("color", Color.ofJson),
       };
   };
-  type t = Raw.chess;
   let create = (~fen=?, ()) =>
     switch ([%external window]) {
     | None => Raw.createForNode(~fen?, ())
@@ -546,14 +559,6 @@ module Api = {
       };
   let undo = t =>
     t |> Raw.undo |> Js.Nullable.toOption |. Belt.Option.map(Move.Full.ofRaw);
-  type kv = {
-    key: string,
-    value: string,
-  };
-  let addToPgnHeader = (t, key_value) =>
-    Raw.addToHeader(t, key_value.key, key_value.value);
-  let pgnHeader = Raw.header;
-  let pgn = Raw.pgn;
   let turn = t => t |> Raw.turn |> Color.ofRaw;
   let remove = (t, square) =>
     Raw.remove(t, Square.toString(square))
