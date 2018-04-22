@@ -24,6 +24,5 @@
   },
   "namespace": true,
   "refmt": 3,
-  // CR mrussell: does this work?
-  "bsc-flags": ["-bs-gen-tds"],
+  "bsc-flags": [],
 }
