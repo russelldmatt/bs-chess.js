@@ -30,10 +30,6 @@ module Pgn: {
   };
 };
 
-let header: t => Pgn.Header.t;
-
-let addToHeader: (t, Pgn.Header.kv) => unit;
-
 let create: (~fen: Fen.t=?, unit) => t;
 
 let loadFen: (t, Fen.t) => unit;
@@ -43,6 +39,10 @@ let fen: t => Fen.t;
 let loadPgn: (~sloppy: bool=?, t, Pgn.t) => successOrFail;
 
 let pgn: t => Pgn.t;
+
+let header: t => Pgn.Header.t;
+
+let addToHeader: (t, Pgn.Header.kv) => unit;
 
 let ascii: t => string;
 
